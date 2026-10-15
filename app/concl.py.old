@@ -1,0 +1,202 @@
+import os
+from datetime import datetime
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from docx import Document
+
+
+def replace_text_in_paragraph(paragraph, search_text, replace_text):
+    """Точечно заменяет текст в параграфе, не удаляя картинки
+
+    и соседние элементы форматирования.
+    """
+    if search_text in paragraph.text:
+        for run in paragraph.runs:
+            if search_text in run.text:
+                run.text = run.text.replace(search_text, replace_text)
+                return
+
+        # Если тег оказался разорван между разными runs внутри одного параграфа:
+        full_text = "".join(run.text for run in paragraph.runs)
+        if search_text in full_text:
+            new_full_text = full_text.replace(search_text, replace_text)
+            # Записываем в первый ран, остальные делаем пустыми, но сохраняем их наличие
+            if paragraph.runs:
+                paragraph.runs[0].text = new_full_text
+                for run in paragraph.runs[1:]:
+                    run.text = ""
+
+
+def replace_text_in_table(table, search_text, replace_text):
+    """Безопасная замена в таблицах с сохранением ширины колонок и верстки."""
+    for row in table.rows:
+        trPr = row._tr.get_or_add_trPr()
+
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                replace_text_in_paragraph(paragraph, search_text, replace_text)
+            for nested_table in cell.tables:
+                replace_text_in_table(nested_table, search_text, replace_text)
+
+
+def process_document(template_path, output_path, joint_num, doc_date):
+    """Открывает шаблон, заменяет теги и сохраняет новый файл."""
+    doc = Document(template_path)
+
+    # Замена в обычных абзацах
+    for paragraph in doc.paragraphs:
+        replace_text_in_paragraph(paragraph, "{{JOINT}}", joint_num)
+        replace_text_in_paragraph(paragraph, "{{DATE}}", doc_date)
+
+    # Замена в таблицах
+    for table in doc.tables:
+        replace_text_in_table(table, "{{JOINT}}", joint_num)
+        replace_text_in_table(table, "{{DATE}}", doc_date)
+
+    doc.save(output_path)
+
+
+class App:
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Генератор заключений НК")
+        self.root.geometry("450x350")
+        self.root.resizable(False, False)
+
+        # Переменные путей
+        self.templates_dir = tk.StringVar()
+
+        # Элементы интерфейса
+        tk.Label(
+            root, text="Генератор заключений (ВИК, РК, УЗК)", font=("Arial", 12, "bold")
+        ).pack(pady=10)
+
+        # Выбор папки с шаблонами
+        frame_dir = tk.Frame(root)
+        frame_dir.pack(pady=5, fill="x", padx=20)
+        tk.Label(frame_dir, text="Папка с шаблонами:").pack(anchor="w")
+
+        dir_sub_frame = tk.Frame(frame_dir)
+        dir_sub_frame.pack(fill="x", pady=2)
+        self.entry_dir = tk.Entry(
+            dir_sub_frame, textvariable=self.templates_dir, width=40
+        )
+        self.entry_dir.pack(side="left", expand=True, fill="x")
+        tk.Button(
+            dir_sub_frame, text="Обзор...", command=self.browse_directory
+        ).pack(side="right", padx=5)
+
+        # Поле ввода номера стыка
+        frame_joint = tk.Frame(root)
+        frame_joint.pack(pady=5, fill="x", padx=20)
+        tk.Label(frame_joint, text="Номер стыка:").pack(anchor="w")
+        self.entry_joint = tk.Entry(frame_joint, font=("Arial", 11))
+        self.entry_joint.pack(fill="x", pady=2)
+
+        # Поле ввода даты
+        frame_date = tk.Frame(root)
+        frame_date.pack(pady=5, fill="x", padx=20)
+        tk.Label(frame_date, text="Дата (ДД.ММ.ГГГГ):").pack(anchor="w")
+
+        date_sub_frame = tk.Frame(frame_date)
+        date_sub_frame.pack(fill="x", pady=2)
+        self.entry_date = tk.Entry(date_sub_frame, font=("Arial", 11))
+        self.entry_date.pack(side="left", expand=True, fill="x")
+        self.entry_date.insert(
+            0, datetime.now().strftime("%d.%m.%Y")
+        )  # По умолчанию сегодняшняя дата
+        tk.Button(
+            date_sub_frame, text="Сегодня", command=self.set_today_date
+        ).pack(side="right", padx=5)
+
+        # Кнопка запуска
+        tk.Button(
+            root,
+            text="Сгенерировать пакет (ВИК, РК, УЗК)",
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 11, "bold"),
+            command=self.generate_files,
+        ).pack(pady=20, fill="x", padx=20)
+
+    def browse_directory(self):
+        dir_path = filedialog.askdirectory()
+        if dir_path:
+            self.templates_dir.set(dir_path)
+
+    def set_today_date(self):
+        self.entry_date.delete(0, tk.END)
+        self.entry_date.insert(0, datetime.now().strftime("%d.%m.%Y"))
+
+    def generate_files(self):
+        folder = self.templates_dir.get()
+        joint = self.entry_joint.get().strip()
+        doc_date = self.entry_date.get().strip()
+
+        if not folder:
+            messagebox.showerror("Ошибка", "Укажите папку с шаблонами!")
+            return
+        if not joint:
+            messagebox.showerror("Ошибка", "Введите номер стыка!")
+            return
+
+        # Строго фиксированные имена шаблонов
+        vik_template = os.path.join(folder, "template_vik.docx")
+        rk_template = os.path.join(folder, "template_rk.docx")
+        uzk_template = os.path.join(folder, "template_uzk.docx")
+
+        # Проверяем, существуют ли все три файла
+        missing_files = []
+        if not os.path.exists(vik_template):
+            missing_files.append("template_vik.docx")
+        if not os.path.exists(rk_template):
+            missing_files.append("template_rk.docx")
+        if not os.path.exists(uzk_template):
+            missing_files.append("template_uzk.docx")
+
+        if missing_files:
+            messagebox.showerror(
+                "Ошибка",
+                "В выбранной папке не найдены следующие шаблоны:\n• "
+                + "\n• ".join(missing_files),
+            )
+            return
+
+        try:
+            out_folder = os.path.join(folder, f"Стык_{joint}")
+            os.makedirs(out_folder, exist_ok=True)
+
+            process_document(
+                vik_template,
+                os.path.join(out_folder, f"{joint} ВИК.docx"),
+                joint,
+                doc_date,
+            )
+            process_document(
+                rk_template,
+                os.path.join(out_folder, f"{joint} РК.docx"),
+                joint,
+                doc_date,
+            )
+            process_document(
+                uzk_template,
+                os.path.join(out_folder, f"{joint} УЗК.docx"),
+                joint,
+                doc_date,
+            )
+
+            messagebox.showinfo(
+                "Успех", f"Все 3 заключения успешно созданы в папке:\n{out_folder}"
+            )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Ошибка", f"Произошла ошибка при обработке:\n{str(e)}"
+            )
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
