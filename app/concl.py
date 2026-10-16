@@ -95,8 +95,8 @@ def process_document(
     else:
         prefix = "GENERAL"
 
-    insp_tag = f"{{INSPECTOR_{prefix}}}"
-    cert_tag = f"{{CERT_{prefix}}}"
+    insp_tag = f"{{{{INSPECTOR_{prefix}}}}}"
+    cert_tag = f"{{{{CERT_{prefix}}}}}"
 
     inspector_name = inspector_data.get("name", "")
     inspector_cert = inspector_data.get("cert", "")
@@ -116,31 +116,29 @@ def process_document(
 
     # Если это шаблон РК и переданы данные дефектов — подставляем их
     if rk_data and "rk" in template_path.lower():
-        # Подставляем общие теги дефектов интервалов
         for interval in RK_INTERVALS:
             data = rk_data["intervals"].get(
                 interval, {"cord": "-", "defect": "ДНО", "concl": "Годен"}
             )
+            # Оборачиваем теги интервалов в двойные скобки {{...}}
+            cord_tag = f"{{{{{interval}_cord}}}}"
+            defect_tag = f"{{{{{interval}_defect}}}}"
+            concl_tag = f"{{{{{interval}_concl}}}}"
+
             for paragraph in doc.paragraphs:
                 replace_text_in_paragraph(
-                    paragraph, f"{{{interval}_cord}}", data["cord"]
+                    paragraph, cord_tag, data["cord"]
                 )
                 replace_text_in_paragraph(
-                    paragraph, f"{{{interval}_defect}}", data["defect"]
+                    paragraph, defect_tag, data["defect"]
                 )
                 replace_text_in_paragraph(
-                    paragraph, f"{{{interval}_concl}}", data["concl"]
+                    paragraph, concl_tag, data["concl"]
                 )
             for table in doc.tables:
-                replace_text_in_table(
-                    table, f"{{{interval}_cord}}", data["cord"]
-                )
-                replace_text_in_table(
-                    table, f"{{{interval}_defect}}", data["defect"]
-                )
-                replace_text_in_table(
-                    table, f"{{{interval}_concl}}", data["concl"]
-                )
+                replace_text_in_table(table, cord_tag, data["cord"])
+                replace_text_in_table(table, defect_tag, data["defect"])
+                replace_text_in_table(table, concl_tag, data["concl"])
 
         # Подставляем итоговое заключение РК
         summary = rk_data.get("summary", "Годен")
