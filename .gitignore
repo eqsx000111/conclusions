@@ -52,5 +52,7 @@ Thumbs.db
 *.bak
 *.backup
 *~
-
+*.*.old
+*.old
+.old
 # Database files are deliberately NOT ignored: keep your project database in Git.
