@@ -11,7 +11,6 @@ ctk.set_default_color_theme("blue")
 
 CONFIG_FILE = "inspectors_config.json"
 
-# Стандартные интервалы мерного пояса для РК
 RK_INTERVALS = [
     "0-300",
     "300-600",
@@ -25,14 +24,18 @@ RK_INTERVALS = [
 
 
 def load_config():
-    """Загружает базу специалистов и настройки по умолчанию из файла."""
+    """Загружает конфигурацию из файла."""
     default_data = {
         "inspectors": [
-            {"name": "Владимиров А.С.", "cert": "II, № 0057-18-22812 от 29.03.2024г."},
-            {"name": "Ильницкий Н.А.", "cert": "II, № 0072-2986-2025 от 28.11.2025г."},
-            {"name": "Ильницкий И.А.", "cert": "II, № 0072-4490-2026 от 03.04.2026г."},
+            {"name": "Владимиров А.С.", "cert": "II, № 0057-18-22812"},
+            {"name": "Ильницкий Н.А.", "cert": "II, № 0072-2986-2025"},
+            {"name": "Ильницкий И.А.", "cert": "II, № 0072-2987-2025"},
         ],
         "defaults": {"ВИК": "Владимиров А.С.", "РК": "Ильницкий И.А.", "УЗК": "Ильницкий Н.А."},
+        "templates_folder": "",
+        "remember_templates": False,
+        "save_folder": "",
+        "remember_folder": False,
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -44,7 +47,7 @@ def load_config():
 
 
 def save_config(data):
-    """Сохраняет базу специалистов в файл."""
+    """Сохраняет конфигурацию в файл."""
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
@@ -101,7 +104,6 @@ def process_document(
     inspector_name = inspector_data.get("name", "")
     inspector_cert = inspector_data.get("cert", "")
 
-    # Базовая замена по всему документу
     for paragraph in doc.paragraphs:
         replace_text_in_paragraph(paragraph, "{{JOINT}}", joint_num)
         replace_text_in_paragraph(paragraph, "{{DATE}}", doc_date)
@@ -114,13 +116,11 @@ def process_document(
         replace_text_in_table(table, insp_tag, inspector_name)
         replace_text_in_table(table, cert_tag, inspector_cert)
 
-    # Если это шаблон РК и переданы данные дефектов — подставляем их
     if rk_data and "rk" in template_path.lower():
         for interval in RK_INTERVALS:
             data = rk_data["intervals"].get(
                 interval, {"cord": "-", "defect": "ДНО", "concl": "Годен"}
             )
-            # Оборачиваем теги интервалов в двойные скобки {{...}}
             cord_tag = f"{{{{{interval}_cord}}}}"
             defect_tag = f"{{{{{interval}_defect}}}}"
             concl_tag = f"{{{{{interval}_concl}}}}"
@@ -140,7 +140,6 @@ def process_document(
                 replace_text_in_table(table, defect_tag, data["defect"])
                 replace_text_in_table(table, concl_tag, data["concl"])
 
-        # Подставляем итоговое заключение РК
         summary = rk_data.get("summary", "Годен")
         for paragraph in doc.paragraphs:
             replace_text_in_paragraph(paragraph, "{{summary_concl}}", summary)
@@ -170,7 +169,6 @@ class RKDefectsWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=15, weight="bold"),
         ).pack(pady=(15, 10))
 
-        # Скролл-контейнер для интервалов
         self.scroll_frame = ctk.CTkScrollableFrame(self, height=450)
         self.scroll_frame.pack(fill="both", expand=True, padx=20, pady=5)
 
@@ -192,17 +190,14 @@ class RKDefectsWindow(ctk.CTkToplevel):
                 anchor="w",
             ).pack(side="left", padx=5)
 
-            # Координата
             entry_cord = ctk.CTkEntry(row_frame, width=80, height=28)
             entry_cord.pack(side="left", padx=2)
             entry_cord.insert(0, saved["cord"])
 
-            # Описание
             entry_defect = ctk.CTkEntry(row_frame, width=170, height=28)
             entry_defect.pack(side="left", padx=2)
             entry_defect.insert(0, saved["defect"])
 
-            # Заключение (Годен / Ремонт)
             combo_concl = ctk.CTkComboBox(
                 row_frame, values=["Годен", "Ремонт", "Вырезать"], width=100, height=28
             )
@@ -410,16 +405,39 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("Генератор заключений НК")
-        self.geometry("520x660")
-        self.resizable(False, False)
+        self.geometry("520x860")
+        self.resizable(True, True)
 
         if getattr(sys, "frozen", False):
             default_dir = os.path.dirname(sys.executable)
         else:
             default_dir = os.path.dirname(os.path.abspath(__file__))
 
-        self.templates_dir = ctk.StringVar(value=default_dir)
-        self.rk_defects_data = None  # Данные дефектов РК
+        config = load_config()
+
+        # Логика папки шаблонов
+        saved_templates_dir = config.get("templates_folder", "")
+        remember_templates = config.get("remember_templates", False)
+        initial_templates_dir = (
+            saved_templates_dir
+            if (remember_templates and saved_templates_dir)
+            else default_dir
+        )
+        self.templates_dir = ctk.StringVar(value=initial_templates_dir)
+        self.remember_templates_var = ctk.BooleanVar(
+            value=remember_templates
+        )
+
+        # Логика папки сохранения результатов
+        saved_save_dir = config.get("save_folder", "")
+        remember_save = config.get("remember_folder", False)
+        initial_save_dir = (
+            saved_save_dir if (remember_save and saved_save_dir) else default_dir
+        )
+        self.save_dir = ctk.StringVar(value=initial_save_dir)
+        self.remember_save_var = ctk.BooleanVar(value=remember_save)
+
+        self.rk_defects_data = None
 
         # Заголовок
         self.title_label = ctk.CTkLabel(
@@ -427,24 +445,24 @@ class App(ctk.CTk):
             text="Автоматизация заключений НК",
             font=ctk.CTkFont(size=18, weight="bold"),
         )
-        self.title_label.pack(pady=(15, 10))
+        self.title_label.pack(pady=(10, 5))
 
-        # Фрейм выбора папки
+        # Фрейм выбора папки с шаблонами
         self.frame_dir = ctk.CTkFrame(self)
-        self.frame_dir.pack(pady=5, padx=20, fill="x")
+        self.frame_dir.pack(pady=2, padx=20, fill="x")
 
         self.label_dir = ctk.CTkLabel(
             self.frame_dir,
             text="Папка с шаблонами:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
-        self.label_dir.pack(anchor="w", padx=10, pady=(5, 0))
+        self.label_dir.pack(anchor="w", padx=10, pady=(3, 0))
 
         self.dir_inner_frame = ctk.CTkFrame(self.frame_dir, fg_color="transparent")
-        self.dir_inner_frame.pack(fill="x", padx=10, pady=5)
+        self.dir_inner_frame.pack(fill="x", padx=10, pady=3)
 
         self.entry_dir = ctk.CTkEntry(
-            self.dir_inner_frame, textvariable=self.templates_dir, height=32
+            self.dir_inner_frame, textvariable=self.templates_dir, height=28
         )
         self.entry_dir.pack(side="left", expand=True, fill="x", padx=(0, 5))
 
@@ -452,41 +470,87 @@ class App(ctk.CTk):
             self.dir_inner_frame,
             text="Обзор",
             width=80,
-            height=32,
-            command=self.browse_directory,
+            height=28,
+            command=self.browse_templates_dir,
         )
         self.btn_browse.pack(side="right")
 
+        self.check_remember_templates = ctk.CTkCheckBox(
+            self.frame_dir,
+            text="Запомнить папку с шаблонами",
+            variable=self.remember_templates_var,
+            command=self.toggle_remember_templates,
+            font=ctk.CTkFont(size=11),
+        )
+        self.check_remember_templates.pack(anchor="w", padx=10, pady=(0, 4))
+
+        # Фрейм выбора папки сохранения
+        self.frame_save = ctk.CTkFrame(self)
+        self.frame_save.pack(pady=2, padx=20, fill="x")
+
+        self.label_save = ctk.CTkLabel(
+            self.frame_save,
+            text="Папка для сохранения результатов:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+        )
+        self.label_save.pack(anchor="w", padx=10, pady=(3, 0))
+
+        self.save_inner_frame = ctk.CTkFrame(self.frame_save, fg_color="transparent")
+        self.save_inner_frame.pack(fill="x", padx=10, pady=3)
+
+        self.entry_save = ctk.CTkEntry(
+            self.save_inner_frame, textvariable=self.save_dir, height=28
+        )
+        self.entry_save.pack(side="left", expand=True, fill="x", padx=(0, 5))
+
+        self.btn_browse_save = ctk.CTkButton(
+            self.save_inner_frame,
+            text="Обзор",
+            width=80,
+            height=28,
+            command=self.browse_save_directory,
+        )
+        self.btn_browse_save.pack(side="right")
+
+        self.check_remember_save = ctk.CTkCheckBox(
+            self.frame_save,
+            text="Запомнить папку сохранения",
+            variable=self.remember_save_var,
+            command=self.toggle_remember_save,
+            font=ctk.CTkFont(size=11),
+        )
+        self.check_remember_save.pack(anchor="w", padx=10, pady=(0, 4))
+
         # Основные данные (Стык и Дата)
         self.frame_inputs = ctk.CTkFrame(self)
-        self.frame_inputs.pack(pady=5, padx=20, fill="x")
+        self.frame_inputs.pack(pady=2, padx=20, fill="x")
 
         self.label_joint = ctk.CTkLabel(
             self.frame_inputs,
             text="Номер стыка:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
-        self.label_joint.pack(anchor="w", padx=10, pady=(8, 0))
+        self.label_joint.pack(anchor="w", padx=10, pady=(4, 0))
 
         self.entry_joint = ctk.CTkEntry(
-            self.frame_inputs, height=32, font=ctk.CTkFont(size=13)
+            self.frame_inputs, height=28, font=ctk.CTkFont(size=12)
         )
-        self.entry_joint.pack(fill="x", padx=10, pady=(3, 8))
+        self.entry_joint.pack(fill="x", padx=10, pady=(2, 4))
 
         self.label_date = ctk.CTkLabel(
             self.frame_inputs,
             text="Дата заключения (ДД.ММ.ГГГГ):",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
-        self.label_date.pack(anchor="w", padx=10, pady=(3, 0))
+        self.label_date.pack(anchor="w", padx=10, pady=(2, 0))
 
         self.date_inner_frame = ctk.CTkFrame(
             self.frame_inputs, fg_color="transparent"
         )
-        self.date_inner_frame.pack(fill="x", padx=10, pady=(3, 10))
+        self.date_inner_frame.pack(fill="x", padx=10, pady=(2, 6))
 
         self.entry_date = ctk.CTkEntry(
-            self.date_inner_frame, height=32, font=ctk.CTkFont(size=13)
+            self.date_inner_frame, height=28, font=ctk.CTkFont(size=12)
         )
         self.entry_date.pack(side="left", expand=True, fill="x", padx=(0, 5))
         self.entry_date.insert(0, datetime.now().strftime("%d.%m.%Y"))
@@ -495,29 +559,29 @@ class App(ctk.CTk):
             self.date_inner_frame,
             text="Сегодня",
             width=80,
-            height=32,
+            height=28,
             command=self.set_today_date,
         )
         self.btn_today.pack(side="right")
 
         # Исполнители
         self.frame_inspectors = ctk.CTkFrame(self)
-        self.frame_inspectors.pack(pady=5, padx=20, fill="x")
+        self.frame_inspectors.pack(pady=2, padx=20, fill="x")
 
         top_insp_frame = ctk.CTkFrame(self.frame_inspectors, fg_color="transparent")
-        top_insp_frame.pack(fill="x", padx=10, pady=(8, 2))
+        top_insp_frame.pack(fill="x", padx=10, pady=(4, 2))
 
         ctk.CTkLabel(
             top_insp_frame,
             text="Исполнители контроля:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
         ).pack(side="left")
 
         ctk.CTkButton(
             top_insp_frame,
             text="⚙ Управление базой",
-            width=130,
-            height=26,
+            width=120,
+            height=24,
             command=self.open_manager,
         ).pack(side="right")
 
@@ -525,69 +589,68 @@ class App(ctk.CTk):
             self.frame_inspectors, fg_color="transparent"
         )
         self.row_vik.pack(fill="x", padx=10, pady=2)
-        ctk.CTkLabel(self.row_vik, text="ВИК:", width=50, anchor="w").pack(
+        ctk.CTkLabel(self.row_vik, text="ВИК:", width=45, anchor="w").pack(
             side="left"
         )
-        self.combo_vik = ctk.CTkComboBox(self.row_vik, height=28)
+        self.combo_vik = ctk.CTkComboBox(self.row_vik, height=26)
         self.combo_vik.pack(side="right", expand=True, fill="x")
 
         self.row_rk = ctk.CTkFrame(self.frame_inspectors, fg_color="transparent")
         self.row_rk.pack(fill="x", padx=10, pady=2)
-        ctk.CTkLabel(self.row_rk, text="РК:", width=50, anchor="w").pack(
+        ctk.CTkLabel(self.row_rk, text="РК:", width=45, anchor="w").pack(
             side="left"
         )
-        self.combo_rk = ctk.CTkComboBox(self.row_rk, height=28)
+        self.combo_rk = ctk.CTkComboBox(self.row_rk, height=26)
         self.combo_rk.pack(side="right", expand=True, fill="x")
 
         self.row_uzk = ctk.CTkFrame(
             self.frame_inspectors, fg_color="transparent"
         )
-        self.row_uzk.pack(fill="x", padx=10, pady=(2, 8))
-        ctk.CTkLabel(self.row_uzk, text="УЗК:", width=50, anchor="w").pack(
+        self.row_uzk.pack(fill="x", padx=10, pady=(2, 4))
+        ctk.CTkLabel(self.row_uzk, text="УЗК:", width=45, anchor="w").pack(
             side="left"
         )
-        self.combo_uzk = ctk.CTkComboBox(self.row_uzk, height=28)
+        self.combo_uzk = ctk.CTkComboBox(self.row_uzk, height=26)
         self.combo_uzk.pack(side="right", expand=True, fill="x")
 
         self.update_comboboxes()
 
         # Фрейм опций РК (Дефекты)
         self.frame_rk_opt = ctk.CTkFrame(self)
-        self.frame_rk_opt.pack(pady=5, padx=20, fill="x")
+        self.frame_rk_opt.pack(pady=2, padx=20, fill="x")
 
         self.check_defects = ctk.CTkCheckBox(
             self.frame_rk_opt,
             text="Указать дефекты / настроить РК",
             command=self.toggle_defects_btn,
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
-        self.check_defects.pack(anchor="w", padx=10, pady=8)
+        self.check_defects.pack(anchor="w", padx=10, pady=4)
 
         self.btn_defects_config = ctk.CTkButton(
             self.frame_rk_opt,
             text="Заполнить карту дефектов РК...",
             state="disabled",
-            height=30,
+            height=26,
             command=self.open_defects_window,
         )
-        self.btn_defects_config.pack(fill="x", padx=10, pady=(0, 8))
+        self.btn_defects_config.pack(fill="x", padx=10, pady=(0, 4))
 
         # Кнопка генерации
         self.btn_generate = ctk.CTkButton(
             self,
             text="Создать пакет документов (ВИК, РК, УЗК)",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#28a745",
             hover_color="#218838",
-            height=40,
+            height=36,
             command=self.generate_files,
         )
-        self.btn_generate.pack(pady=(10, 15), padx=20, fill="x")
+        self.btn_generate.pack(pady=(8, 10), padx=20, fill="x")
 
     def toggle_defects_btn(self):
         if self.check_defects.get() == 1:
             self.btn_defects_config.configure(state="normal")
-            # Если еще не открывали, инициализируем дефолтные «ДНО» / «Годен»
             if not self.rk_defects_data:
                 self.rk_defects_data = {
                     interval: {"cord": "-", "defect": "ДНО", "concl": "Годен"}
@@ -601,7 +664,6 @@ class App(ctk.CTk):
 
     def save_rk_defects(self, result_dict):
         self.rk_defects_data = result_dict["intervals"]
-        self.rk_summary_status = result_dict["summary"]
 
     def update_comboboxes(self):
         config = load_config()
@@ -619,17 +681,53 @@ class App(ctk.CTk):
     def open_manager(self):
         InspectorManagerWindow(self, self.update_comboboxes)
 
-    def browse_directory(self):
+    def browse_templates_dir(self):
         dir_path = filedialog.askdirectory()
         if dir_path:
             self.templates_dir.set(dir_path)
+            if self.remember_templates_var.get():
+                config = load_config()
+                config["templates_folder"] = dir_path
+                config["remember_templates"] = True
+                save_config(config)
+
+    def toggle_remember_templates(self):
+        config = load_config()
+        is_remember = self.remember_templates_var.get()
+        config["remember_templates"] = is_remember
+        if is_remember:
+            config["templates_folder"] = self.templates_dir.get()
+        else:
+            config["templates_folder"] = ""
+        save_config(config)
+
+    def browse_save_directory(self):
+        dir_path = filedialog.askdirectory()
+        if dir_path:
+            self.save_dir.set(dir_path)
+            if self.remember_save_var.get():
+                config = load_config()
+                config["save_folder"] = dir_path
+                config["remember_folder"] = True
+                save_config(config)
+
+    def toggle_remember_save(self):
+        config = load_config()
+        is_remember = self.remember_save_var.get()
+        config["remember_folder"] = is_remember
+        if is_remember:
+            config["save_folder"] = self.save_dir.get()
+        else:
+            config["save_folder"] = ""
+        save_config(config)
 
     def set_today_date(self):
-        self.entry_date.delete(0, ctk.END)
+        self.entry_date.delete(0, tk.END)
         self.entry_date.insert(0, datetime.now().strftime("%d.%m.%Y"))
 
     def generate_files(self):
-        folder = self.templates_dir.get()
+        templates_folder = self.templates_dir.get()
+        target_folder = self.save_dir.get()
         joint = self.entry_joint.get().strip()
         doc_date = self.entry_date.get().strip()
 
@@ -637,8 +735,11 @@ class App(ctk.CTk):
         rk_name = self.combo_rk.get().strip()
         uzk_name = self.combo_uzk.get().strip()
 
-        if not folder:
+        if not templates_folder:
             messagebox.showerror("Ошибка", "Укажите папку с шаблонами!")
+            return
+        if not target_folder:
+            messagebox.showerror("Ошибка", "Укажите папку для сохранения результатов!")
             return
         if not joint:
             messagebox.showerror("Ошибка", "Введите номер стыка!")
@@ -651,9 +752,9 @@ class App(ctk.CTk):
         rk_data = inspectors_map.get(rk_name, {"name": rk_name, "cert": ""})
         uzk_data = inspectors_map.get(uzk_name, {"name": uzk_name, "cert": ""})
 
-        vik_template = os.path.join(folder, "template_vik.docx")
-        rk_template = os.path.join(folder, "template_rk.docx")
-        uzk_template = os.path.join(folder, "template_uzk.docx")
+        vik_template = os.path.join(templates_folder, "template_vik.docx")
+        rk_template = os.path.join(templates_folder, "template_rk.docx")
+        uzk_template = os.path.join(templates_folder, "template_uzk.docx")
 
         missing_files = []
         if not os.path.exists(vik_template):
@@ -666,12 +767,11 @@ class App(ctk.CTk):
         if missing_files:
             messagebox.showerror(
                 "Ошибка",
-                "В указанной папке отсутствуют шаблоны:\n• "
+                "В папке шаблонов отсутствуют файлы:\n• "
                 + "\n• ".join(missing_files),
             )
             return
 
-        # Подготовка данных дефектов РК, если чекбокс активен
         rk_payload = None
         if self.check_defects.get() == 1:
             if not self.rk_defects_data:
@@ -679,7 +779,6 @@ class App(ctk.CTk):
                     interval: {"cord": "-", "defect": "ДНО", "concl": "Годен"}
                     for interval in RK_INTERVALS
                 }
-            # Проверяем итоговый статус
             has_repair = any(
                 d["concl"] in ["Ремонт", "Вырезать"]
                 for d in self.rk_defects_data.values()
@@ -690,7 +789,6 @@ class App(ctk.CTk):
                 "summary": summary,
             }
         else:
-            # Если галочка не стоит, по умолчанию все зоны чистые (ДНО, Годен)
             default_intervals = {
                 interval: {"cord": "-", "defect": "ДНО", "concl": "Годен"}
                 for interval in RK_INTERVALS
@@ -698,7 +796,7 @@ class App(ctk.CTk):
             rk_payload = {"intervals": default_intervals, "summary": "Годен"}
 
         try:
-            out_folder = os.path.join(folder, f"Стык_{joint}")
+            out_folder = os.path.join(target_folder, f"Стык_{joint}")
             os.makedirs(out_folder, exist_ok=True)
 
             process_document(
