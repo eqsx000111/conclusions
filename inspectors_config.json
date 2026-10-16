@@ -27,8 +27,8 @@
         "№ЛНК-011А114"
     ],
     "default_lab_cert": "№ЛНК-042А0045",
-    "templates_folder": "",
-    "remember_templates": false,
-    "save_folder": "",
-    "remember_folder": false
+    "templates_folder": "/Users/eqsx/Dev/test_dir",
+    "remember_templates": true,
+    "save_folder": "/Users/eqsx/Dev/test_dir",
+    "remember_folder": true
 }

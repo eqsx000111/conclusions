@@ -62,7 +62,7 @@ def process_document(
     for table in doc.tables:
         replace_text_in_table(table, "{{JOINT}}", joint_num)
         replace_text_in_table(table, "{{DATE}}", doc_date)
-        replace_text_in_paragraph(paragraph, "{{LAB_CERT}}", lab_cert)
+        replace_text_in_table(table, "{{LAB_CERT}}", lab_cert)
         replace_text_in_table(table, insp_tag, inspector_name)
         replace_text_in_table(table, cert_tag, inspector_cert)
 
