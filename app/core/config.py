@@ -23,8 +23,12 @@ def load_config():
             {"name": "Ильницкий Н.А.", "cert": "II, № 0072-2986-2025"},
             {"name": "Ильницкий И.А.", "cert": "II, № 0072-2987-2025"},
         ],
-        "defaults": {"ВИК": "Владимиров А.С.", "РК": "Ильницкий И.А.", "УЗК": "Ильницкий Н.А."},
+        "defaults": {
+            "ВИК": "Владимиров А.С.",
+            "РК": "Ильницкий И.А.", "УЗК": "Ильницкий Н.А."
+        },
         "lab_certs": ["№ЛНК-042А0045", "№ЛНК-011А114"],
+        "default_lab_cert": "№ЛНК-042А0045",
         "templates_folder": "",
         "remember_templates": False,
         "save_folder": "",
@@ -33,7 +37,13 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            # Проверяем, появились ли новые ключи.
+            # Если нет — подставляем дефолтные на лету!
+            for key, value in default_data.items():
+                if key not in data:
+                    data[key] = value
+            return data
         except Exception:
             return default_data
     return default_data

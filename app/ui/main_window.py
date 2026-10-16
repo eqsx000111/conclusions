@@ -166,7 +166,8 @@ class App(ctk.CTk):
         default_cert = config.get("default_lab_cert", lab_certs[0] if lab_certs else "")
         self.combo_lab = ctk.CTkComboBox(self.frame_lab, values=lab_certs, height=26)
         self.combo_lab.pack(fill="x", padx=10, pady=(2, 6))
-        self.combo_lab.set(default_cert)
+        if default_cert:
+            self.combo_lab.set(default_cert)
 
         # Исполнители
         self.frame_inspectors = ctk.CTkFrame(self)

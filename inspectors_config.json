@@ -2,15 +2,19 @@
     "inspectors": [
         {
             "name": "Владимиров А.С.",
-            "cert": "ll, №0057-18-22812 от 29.03.2024г."
-        },
-        {
-            "name": "Ильницкий И.А.",
-            "cert": "ll, №0072-4490-2026 от 03.04.2026г."
+            "cert": "II, № 0057-18-22812"
         },
         {
             "name": "Ильницкий Н.А.",
-            "cert": "ll, №0072-2986-2025 от 28.11.2025г."
+            "cert": "II, № 0072-2986-2025"
+        },
+        {
+            "name": "Ильницкий И.А.",
+            "cert": "II, № 0072-2987-2025"
+        },
+        {
+            "name": "sss",
+            "cert": "ddd"
         }
     ],
     "defaults": {
@@ -18,8 +22,13 @@
         "РК": "Ильницкий И.А.",
         "УЗК": "Ильницкий Н.А."
     },
-    "remember_templates": true,
-    "templates_folder": "/Users/eqsx/Dev/test_dir",
-    "remember_folder": true,
-    "save_folder": "/Users/eqsx/Dev/test_dir/result"
+    "lab_certs": [
+        "№ЛНК-042А0045",
+        "№ЛНК-011А114"
+    ],
+    "default_lab_cert": "№ЛНК-042А0045",
+    "templates_folder": "",
+    "remember_templates": false,
+    "save_folder": "",
+    "remember_folder": false
 }
