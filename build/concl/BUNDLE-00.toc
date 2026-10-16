@@ -1,0 +1,1 @@
+([('concl', '/Users/eqsx/Dev/conclusions/dist/concl', 'EXECUTABLE')],)
